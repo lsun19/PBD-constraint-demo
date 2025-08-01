@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KawaiiPhysics PBD披风演示</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .view-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .view-section {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            background: white;
+        }
+        .view-title {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px;
+            font-weight: bold;
+            text-align: center;
+        }
+        canvas {
+            display: block;
+            cursor: move;
+            background: linear-gradient(to bottom, #e8f4f8, #f5f5f5);
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.active {
+            background-color: #2196F3;
+        }
+        .info {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+        .status {
+            text-align: center;
+            padding: 8px;
+            font-size: 14px;
+            color: #666;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .param-controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .param-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        label {
+            font-size: 14px;
+            color: #555;
+        }
+        input[type="range"] {
+            width: 100px;
+        }
+        .param-value {
+            font-size: 12px;
+            color: #666;
+            min-width: 40px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>KawaiiPhysics PBD披风演示</h1>
+        
+        <div class="info">
+            <p><strong>演示说明：</strong>使用PBD约束系统实现的布料物理</p>
+            <p><strong>特性：</strong></p>
+            <ul>
+                <li>不会过度拉伸碰撞部分网格</li>
+                <li>不会过度挤压边缘部分网格</li>
+                <li>碰撞表现有些过于“硬”</li>
+                <li>碰撞抖动有些不自然</li>
+            </ul>
+        </div>
+
+        <div class="param-controls">
+            <div class="param-item">
+                <label>重力：</label>
+                <input type="range" id="gravitySlider" min="0" max="100" value="50">
+                <span class="param-value" id="gravityValue">0.5</span>
+            </div>
+            <div class="param-item">
+                <label>阻尼：</label>
+                <input type="range" id="dampingSlider" min="80" max="99" value="95">
+                <span class="param-value" id="dampingValue">0.95</span>
+            </div>
+            <div class="param-item">
+                <label>刚度：</label>
+                <input type="range" id="stiffnessSlider" min="0" max="20" value="2">
+                <span class="param-value" id="stiffnessValue">0.02</span>
+            </div>
+            <div class="param-item">
+                <label>碰撞力：</label>
+                <input type="range" id="collisionForceSlider" min="50" max="200" value="100">
+                <span class="param-value" id="collisionForceValue">1.0</span>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ff9800;"></div>
+                <span>身体胶囊体</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #2196F3;"></div>
+                <span>自由节点</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #1565C0;"></div>
+                <span>固定节点</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #4CAF50;"></div>
+                <span>碰撞节点</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: rgba(156, 39, 176, 0.3);"></div>
+                <span>正常网格</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: rgba(76, 175, 80, 0.4);"></div>
+                <span>碰撞网格</span>
+            </div>
+        </div>
+
+        <div class="view-grid">
+            <div class="view-section">
+                <div class="view-title">侧视图（Side View）- 深度碰撞</div>
+                <canvas id="canvasSide" width="650" height="600"></canvas>
+            </div>
+            
+            <div class="view-section">
+                <div class="view-title">正视图（Front View）- 宽度展示</div>
+                <canvas id="canvasFront" width="650" height="600"></canvas>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="resetBtn">重置位置</button>
+            <button id="pauseBtn">暂停模拟</button>
+            <button id="windBtn" class="active">风力效果</button>
+            <button id="debugBtn">调试信息</button>
+        </div>
+
+        <div id="debugInfo" class="status" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Get canvases
+        const canvasSide = document.getElementById('canvasSide');
+        const ctxSide = canvasSide.getContext('2d');
+        const canvasFront = document.getElementById('canvasFront');
+        const ctxFront = canvasFront.getContext('2d');
+
+        // Controls
+        const resetBtn = document.getElementById('resetBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const windBtn = document.getElementById('windBtn');
+        const debugBtn = document.getElementById('debugBtn');
+        const debugInfo = document.getElementById('debugInfo');
+        
+        // Sliders
+        const gravitySlider = document.getElementById('gravitySlider');
+        const dampingSlider = document.getElementById('dampingSlider');
+        const stiffnessSlider = document.getElementById('stiffnessSlider');
+        const collisionForceSlider = document.getElementById('collisionForceSlider');
+        const gravityValue = document.getElementById('gravityValue');
+        const dampingValue = document.getElementById('dampingValue');
+        const stiffnessValue = document.getElementById('stiffnessValue');
+        const collisionForceValue = document.getElementById('collisionForceValue');
+
+        // Settings
+        let isPaused = false;
+        let windEnabled = false;
+        let showDebug = false;
+        let time = 0;
+        let deltaTime = 1/60;
+
+        // Physics parameters
+        let gravity = 0.5;
+        let damping = 0.95;
+        let stiffness = 0.02;
+        let collisionForce = 1.0;
+
+        // Body (capsule) position
+        let bodyX = 180;
+        let bodyY = 300;
+        let bodyZ = 0;
+        const bodyRadius = 60;
+        const bodyLength = 150;
+        let isDraggingSide = false;
+        let isDraggingFront = false;
+
+        // Cape settings
+        const capeWidth = 400;      // 披风宽度
+        const capeHeight = 400;     // 披风高度
+        const capeRows = 12;        // 12行
+        const capeCols = 8;         // 8列
+        const capeStartX = 150;
+        const capeStartY = 80;
+        const capeStartZ = -capeWidth/2;
+
+        // Node class
+        class CapeNode {
+            constructor(x, y, z, row, col, isFixed = false) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                this.oldX = x;
+                this.oldY = y;
+                this.oldZ = z;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.velocityZ = 0;
+                this.isFixed = isFixed;
+                this.radius = 5;
+                this.row = row;
+                this.col = col;
+                this.originalX = x;
+                this.originalY = y;
+                this.originalZ = z;
+                this.isColliding = false;
+                this.collisionForce = {x: 0, y: 0, z: 0};
+            }
+
+            update(dt) {
+                if (this.isFixed || isPaused) return;
+
+                // Verlet integration
+                this.velocityX = (this.x - this.oldX) * damping;
+                this.velocityY = (this.y - this.oldY) * damping;
+                this.velocityZ = (this.z - this.oldZ) * damping;
+
+                this.oldX = this.x;
+                this.oldY = this.y;
+                this.oldZ = this.z;
+
+                // Apply forces
+                this.velocityY += gravity * dt;
+
+                // Stiffness
+                this.velocityX += (this.originalX - this.x) * stiffness;
+                this.velocityZ += (this.originalZ - this.z) * stiffness;
+
+                // Apply collision force
+                this.velocityX += this.collisionForce.x * dt;
+                this.velocityY += this.collisionForce.y * dt;
+                this.velocityZ += this.collisionForce.z * dt;
+
+                // Update position
+                this.x += this.velocityX * dt * 60;
+                this.y += this.velocityY * dt * 60;
+                this.z += this.velocityZ * dt * 60;
+
+                // Wind
+                if (windEnabled) {
+                    const windStrength = 0.8 * (this.row / capeRows);
+                    this.x += Math.sin(time * 0.002 + this.y * 0.01) * windStrength;
+                    this.z += Math.cos(time * 0.0015 + this.x * 0.01) * windStrength * 0.5;
+                }
+
+                // Reset collision
+                this.isColliding = false;
+                this.collisionForce = {x: 0, y: 0, z: 0};
+            }
+        }
+
+        // Constraint class
+        class Constraint {
+            constructor(node1, node2, restLength) {
+                this.node1 = node1;
+                this.node2 = node2;
+                this.restLength = restLength;
+                this.stiffness = 1.0;
+            }
+
+            satisfy() {
+                const dx = this.node2.x - this.node1.x;
+                const dy = this.node2.y - this.node1.y;
+                const dz = this.node2.z - this.node1.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                if (dist > 0) {
+                    const diff = (this.restLength - dist) / dist * this.stiffness;
+                    const translateX = dx * diff * 0.5;
+                    const translateY = dy * diff * 0.5;
+                    const translateZ = dz * diff * 0.5;
+
+                    if (!this.node1.isFixed) {
+                        this.node1.x -= translateX;
+                        this.node1.y -= translateY;
+                        this.node1.z -= translateZ;
+                    }
+                    if (!this.node2.isFixed) {
+                        this.node2.x += translateX;
+                        this.node2.y += translateY;
+                        this.node2.z += translateZ;
+                    }
+                }
+            }
+        }
+
+        // Create cape mesh
+        const capeNodes = [];
+        const constraints = [];
+
+        function createCapeMesh() {
+            capeNodes.length = 0;
+            constraints.length = 0;
+
+            // Create nodes
+            for (let row = 0; row < capeRows; row++) {
+                capeNodes[row] = [];
+                for (let col = 0; col < capeCols; col++) {
+                    const x = capeStartX;
+                    const y = capeStartY + (row * capeHeight / (capeRows - 1));
+                    const z = capeStartZ + (col * capeWidth / (capeCols - 1));
+                    
+                    // 只固定最顶部一行
+                    const isFixed = row === 0;
+                    
+                    const node = new CapeNode(x, y, z, row, col, isFixed);
+                    capeNodes[row][col] = node;
+                }
+            }
+
+            // Create constraints
+            // Structural constraints
+            for (let row = 0; row < capeRows; row++) {
+                for (let col = 0; col < capeCols; col++) {
+                    if (row < capeRows - 1) {
+                        // Vertical
+                        const restLength = capeHeight / (capeRows - 1);
+                        constraints.push(new Constraint(
+                            capeNodes[row][col],
+                            capeNodes[row + 1][col],
+                            restLength
+                        ));
+                    }
+                    if (col < capeCols - 1) {
+                        // Horizontal
+                        const restLength = capeWidth / (capeCols - 1);
+                        constraints.push(new Constraint(
+                            capeNodes[row][col],
+                            capeNodes[row][col + 1],
+                            restLength
+                        ));
+                    }
+                }
+            }
+
+            // Shear constraints
+            for (let row = 0; row < capeRows - 1; row++) {
+                for (let col = 0; col < capeCols - 1; col++) {
+                    const restLength = Math.sqrt(
+                        Math.pow(capeWidth / (capeCols - 1), 2) +
+                        Math.pow(capeHeight / (capeRows - 1), 2)
+                    );
+                    
+                    constraints.push(new Constraint(
+                        capeNodes[row][col],
+                        capeNodes[row + 1][col + 1],
+                        restLength
+                    ));
+                    
+                    constraints.push(new Constraint(
+                        capeNodes[row + 1][col],
+                        capeNodes[row][col + 1],
+                        restLength
+                    ));
+                }
+            }
+
+            // Bend constraints
+            for (let row = 0; row < capeRows - 2; row++) {
+                for (let col = 0; col < capeCols; col++) {
+                    const restLength = 2 * capeHeight / (capeRows - 1);
+                    const c = new Constraint(
+                        capeNodes[row][col],
+                        capeNodes[row + 2][col],
+                        restLength
+                    );
+                    c.stiffness = 0.2; // Softer for bending
+                    constraints.push(c);
+                }
+            }
+        }
+
+        // Collision detection
+        function pointToCapsuleDistance(point, capsuleStart, capsuleEnd, radius) {
+            const d = {
+                x: capsuleEnd.x - capsuleStart.x,
+                y: capsuleEnd.y - capsuleStart.y,
+                z: capsuleEnd.z - capsuleStart.z
+            };
+            
+            const v = {
+                x: point.x - capsuleStart.x,
+                y: point.y - capsuleStart.y,
+                z: point.z - capsuleStart.z
+            };
+            
+            const t = Math.max(0, Math.min(1, 
+                (v.x * d.x + v.y * d.y + v.z * d.z) / 
+                (d.x * d.x + d.y * d.y + d.z * d.z)
+            ));
+            
+            const closest = {
+                x: capsuleStart.x + t * d.x,
+                y: capsuleStart.y + t * d.y,
+                z: capsuleStart.z + t * d.z
+            };
+            
+            const dist = Math.sqrt(
+                Math.pow(point.x - closest.x, 2) +
+                Math.pow(point.y - closest.y, 2) +
+                Math.pow(point.z - closest.z, 2)
+            );
+            
+            return {
+                distance: dist,
+                closest: closest,
+                normal: {
+                    x: (point.x - closest.x) / (dist + 0.0001),
+                    y: (point.y - closest.y) / (dist + 0.0001),
+                    z: (point.z - closest.z) / (dist + 0.0001)
+                }
+            };
+        }
+
+        function applyCollisions() {
+            const capsuleStart = { x: bodyX, y: bodyY - bodyLength/2, z: bodyZ };
+            const capsuleEnd = { x: bodyX, y: bodyY + bodyLength/2, z: bodyZ };
+            
+            let collisionCount = 0;
+
+            for (let row = 0; row < capeRows; row++) {
+                for (let col = 0; col < capeCols; col++) {
+                    const node = capeNodes[row][col];
+                    if (node.isFixed) continue;
+                    
+                    const result = pointToCapsuleDistance(node, capsuleStart, capsuleEnd, bodyRadius);
+                    
+                    if (result.distance < bodyRadius + node.radius) {
+                        const penetration = bodyRadius + node.radius - result.distance;
+                        
+                        // Strong collision response
+                        node.x += result.normal.x * penetration * collisionForce;
+                        node.y += result.normal.y * penetration * collisionForce;
+                        node.z += result.normal.z * penetration * collisionForce;
+                        
+                        // Add collision force for next frame
+                        node.collisionForce.x = result.normal.x * penetration * 10;
+                        node.collisionForce.y = result.normal.y * penetration * 10;
+                        node.collisionForce.z = result.normal.z * penetration * 10;
+                        
+                        node.isColliding = true;
+                        collisionCount++;
+                    }
+                }
+            }
+
+            return collisionCount;
+        }
+
+        function satisfyConstraints() {
+            const iterations = 3;
+            for (let i = 0; i < iterations; i++) {
+                constraints.forEach(c => c.satisfy());
+            }
+        }
+
+        // Drawing functions
+        function project3D(x, y, z, viewMode) {
+            if (viewMode === 'side') {
+                return { x: x + 150, y: y + 50 };
+            } else {
+                return { x: 325 + z * 0.7, y: y + 50 };
+            }
+        }
+
+        function drawScene(ctx, viewMode) {
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+            // Draw grid lines for reference
+            ctx.strokeStyle = 'rgba(200, 200, 200, 0.3)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * 60);
+                ctx.lineTo(ctx.canvas.width, i * 60);
+                ctx.stroke();
+            }
+
+            // Sort for proper depth rendering
+            const capsuleDepth = viewMode === 'side' ? bodyX : -bodyZ;
+            const capeDepth = viewMode === 'side' ? capeStartX : 0;
+            
+            if (capsuleDepth < capeDepth) {
+                drawCapsule(ctx, viewMode);
+                drawCape(ctx, viewMode);
+            } else {
+                drawCape(ctx, viewMode);
+                drawCapsule(ctx, viewMode);
+            }
+
+            // Info text
+            ctx.fillStyle = '#333';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${capeRows}×${capeCols} 网格`, 10, 20);
+        }
+
+        function drawCape(ctx, viewMode) {
+            // Draw mesh
+            for (let row = 0; row < capeRows - 1; row++) {
+                for (let col = 0; col < capeCols - 1; col++) {
+                    const p1 = capeNodes[row][col];
+                    const p2 = capeNodes[row][col + 1];
+                    const p3 = capeNodes[row + 1][col];
+                    const p4 = capeNodes[row + 1][col + 1];
+                    
+                    const proj1 = project3D(p1.x, p1.y, p1.z, viewMode);
+                    const proj2 = project3D(p2.x, p2.y, p2.z, viewMode);
+                    const proj3 = project3D(p3.x, p3.y, p3.z, viewMode);
+                    const proj4 = project3D(p4.x, p4.y, p4.z, viewMode);
+                    
+                    // Fill color
+                    const isColliding = p1.isColliding || p2.isColliding || 
+                                       p3.isColliding || p4.isColliding;
+                    ctx.fillStyle = isColliding ? 
+                        'rgba(76, 175, 80, 0.4)' : 
+                        'rgba(156, 39, 176, 0.3)';
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(proj1.x, proj1.y);
+                    ctx.lineTo(proj2.x, proj2.y);
+                    ctx.lineTo(proj4.x, proj4.y);
+                    ctx.lineTo(proj3.x, proj3.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Grid lines
+                    ctx.strokeStyle = isColliding ? 
+                        'rgba(76, 175, 80, 0.8)' : 
+                        'rgba(100, 100, 100, 0.5)';
+                    ctx.lineWidth = isColliding ? 2 : 1;
+                    ctx.stroke();
+                }
+            }
+
+            // Draw nodes
+            for (let row = 0; row < capeRows; row++) {
+                for (let col = 0; col < capeCols; col++) {
+                    const node = capeNodes[row][col];
+                    const proj = project3D(node.x, node.y, node.z, viewMode);
+                    
+                    if (node.isColliding) {
+                        ctx.fillStyle = '#4CAF50';
+                        ctx.beginPath();
+                        ctx.arc(proj.x, proj.y, node.radius + 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.fillStyle = node.isFixed ? '#1565C0' : 
+                                   (node.isColliding ? '#4CAF50' : '#2196F3');
+                    ctx.beginPath();
+                    ctx.arc(proj.x, proj.y, node.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#0D47A1';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawCapsule(ctx, viewMode) {
+            const capsuleStart = { x: bodyX, y: bodyY - bodyLength/2, z: bodyZ };
+            const capsuleEnd = { x: bodyX, y: bodyY + bodyLength/2, z: bodyZ };
+            
+            const startProj = project3D(capsuleStart.x, capsuleStart.y, capsuleStart.z, viewMode);
+            const endProj = project3D(capsuleEnd.x, capsuleEnd.y, capsuleEnd.z, viewMode);
+            
+            // Capsule body
+            ctx.strokeStyle = '#ff9800';
+            ctx.lineWidth = bodyRadius * 2;
+            ctx.lineCap = 'round';
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(startProj.x, startProj.y);
+            ctx.lineTo(endProj.x, endProj.y);
+            ctx.stroke();
+            
+            // Center line
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#e65100';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(startProj.x, startProj.y);
+            ctx.lineTo(endProj.x, endProj.y);
+            ctx.stroke();
+            
+            // End caps
+            ctx.fillStyle = '#ff5722';
+            ctx.beginPath();
+            ctx.arc(startProj.x, startProj.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(endProj.x, endProj.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Mouse handling
+        function handleMouseDown(e, canvas, viewMode) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const proj = project3D(bodyX, bodyY, bodyZ, viewMode);
+            const dist = Math.sqrt(Math.pow(mouseX - proj.x, 2) + Math.pow(mouseY - proj.y, 2));
+            
+            if (dist < bodyRadius + 30) {
+                if (viewMode === 'side') {
+                    isDraggingSide = true;
+                } else {
+                    isDraggingFront = true;
+                }
+            }
+        }
+
+        function handleMouseMove(e, canvas, viewMode) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            if (viewMode === 'side' && isDraggingSide) {
+                bodyX = mouseX - 150;
+                bodyY = mouseY - 50;
+                bodyX = Math.max(100, Math.min(400, bodyX));
+                bodyY = Math.max(100, Math.min(500, bodyY));
+            } else if (viewMode === 'front' && isDraggingFront) {
+                bodyZ = (mouseX - 325) / 0.7;
+                bodyY = mouseY - 50;
+                bodyZ = Math.max(-200, Math.min(200, bodyZ));
+                bodyY = Math.max(100, Math.min(500, bodyY));
+            }
+        }
+
+        // Event listeners
+        canvasSide.addEventListener('mousedown', (e) => handleMouseDown(e, canvasSide, 'side'));
+        canvasFront.addEventListener('mousedown', (e) => handleMouseDown(e, canvasFront, 'front'));
+        canvasSide.addEventListener('mousemove', (e) => handleMouseMove(e, canvasSide, 'side'));
+        canvasFront.addEventListener('mousemove', (e) => handleMouseMove(e, canvasFront, 'front'));
+        window.addEventListener('mouseup', () => {
+            isDraggingSide = false;
+            isDraggingFront = false;
+        });
+
+        // Button listeners
+        resetBtn.addEventListener('click', () => {
+            bodyX = 180;
+            bodyY = 300;
+            bodyZ = 0;
+            createCapeMesh();
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            isPaused = !isPaused;
+            pauseBtn.textContent = isPaused ? '继续模拟' : '暂停模拟';
+            pauseBtn.classList.toggle('active', !isPaused);
+        });
+
+        windBtn.addEventListener('click', () => {
+            windEnabled = !windEnabled;
+            windBtn.classList.toggle('active', windEnabled);
+        });
+
+        debugBtn.addEventListener('click', () => {
+            showDebug = !showDebug;
+            debugBtn.classList.toggle('active', showDebug);
+            debugInfo.style.display = showDebug ? 'block' : 'none';
+        });
+
+        // Slider listeners
+        gravitySlider.addEventListener('input', (e) => {
+            gravity = e.target.value / 100;
+            gravityValue.textContent = gravity.toFixed(2);
+        });
+
+        dampingSlider.addEventListener('input', (e) => {
+            damping = e.target.value / 100;
+            dampingValue.textContent = damping.toFixed(2);
+        });
+
+        stiffnessSlider.addEventListener('input', (e) => {
+            stiffness = e.target.value / 1000;
+            stiffnessValue.textContent = stiffness.toFixed(3);
+        });
+
+        collisionForceSlider.addEventListener('input', (e) => {
+            collisionForce = e.target.value / 100;
+            collisionForceValue.textContent = collisionForce.toFixed(1);
+        });
+
+        // Initialize
+        createCapeMesh();
+
+        // Animation loop
+        let lastTime = 0;
+        function animate(currentTime) {
+            if (lastTime === 0) lastTime = currentTime;
+            deltaTime = Math.min((currentTime - lastTime) / 1000, 1/30);
+            lastTime = currentTime;
+            
+            if (!isPaused) {
+                time++;
+                
+                // Update physics
+                for (let row = 0; row < capeRows; row++) {
+                    for (let col = 0; col < capeCols; col++) {
+                        capeNodes[row][col].update(deltaTime);
+                    }
+                }
+                
+                // Apply constraints multiple times
+                satisfyConstraints();
+                
+                // Apply collisions
+                const collisionCount = applyCollisions();
+                
+                // Apply constraints again after collision
+                satisfyConstraints();
+                
+                // Update debug info
+                if (showDebug) {
+                    debugInfo.innerHTML = `
+                        <strong>身体位置:</strong> X=${bodyX.toFixed(0)}, Y=${bodyY.toFixed(0)}, Z=${bodyZ.toFixed(0)}<br>
+                        <strong>网格:</strong> ${capeRows}×${capeCols} = ${capeRows * capeCols} 节点<br>
+                        <strong>约束:</strong> ${constraints.length} 个<br>
+                        <strong>碰撞节点:</strong> ${collisionCount} 个<br>
+                        <strong>帧率:</strong> ${(1/deltaTime).toFixed(0)} FPS
+                    `;
+                }
+            }
+            
+            // Draw
+            drawScene(ctxSide, 'side');
+            drawScene(ctxFront, 'front');
+            
+            requestAnimationFrame(animate);
+        }
+        
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
